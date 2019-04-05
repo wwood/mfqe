@@ -1,0 +1,12 @@
+[package]
+name = "mfqe"
+version = "0.1.0"
+authors = ["Ben J Woodcroft <donttrustben@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+fastq = "0.6.*"
+clap = "2.*"
+log = "0.4.*"
+env_logger = "0.6.*"
+flate2 = "1.0.*"
