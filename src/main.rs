@@ -30,7 +30,11 @@ fn main() {
                \n\
                Purpose is to extract one or more sets of reads from a FASTQ file by specifying their read name.\n\n\
                Read name files are uncompressed text files with read names (without comments).\n\
-               Output is gzip-compressed, input may or may not be.\n")
+               Output is gzip-compressed, input may or may not be.\n\
+               \nOther options:
+               \n--input-fastq <PATH>: Use this file as input fastq [default: Use STDIN]
+               \n")
+        .usage("zcat my.fastq.gz |mfqe --fastq-read-name-lists <LIST1> .. --output-fastq-files <OUTPUT1> ..")
 
         .arg(Arg::with_name("fastq-read-name-lists")
              .long("fastq-read-name-lists")
@@ -41,7 +45,10 @@ fn main() {
              .long("output-fastq-files")
              .required(true)
              .takes_value(true)
-             .multiple(true));
+             .multiple(true))
+        .arg(Arg::with_name("input-fastq")
+             .long("input-fastq")
+             .takes_value(true));
 
     let matches = app.clone().get_matches();
 
@@ -59,12 +66,27 @@ fn main() {
     // output files.
     let fastq_read_lists: Vec<&str> = matches.values_of("fastq-read-name-lists").unwrap().collect();
     let fastq_output_files: Vec<&str> = matches.values_of("output-fastq-files").unwrap().collect();
+    let fastq_input = match matches.value_of("input-fastq") {
+        Some(path) => Some(BufReader::new(
+            File::open(path)
+                .expect("Failed to open fastq file for reading"))),
+        None => None
+    };
 
     if fastq_output_files.len() != fastq_read_lists.len() {
         panic!("The number of read name files was {}, output files there was \
                 {}. These numbers must be equal.",
                fastq_output_files.len(), fastq_read_lists.len());
     }
+
+    fastq_pipeline(fastq_input, fastq_read_lists, fastq_output_files);
+}
+
+
+fn fastq_pipeline(
+    fastq_input: Option<BufReader<File>>,
+    fastq_read_lists: Vec<&str>,
+    fastq_output_files: Vec<&str>) {
 
     // Read in each read name into has hashmap
     let mut name_to_index: HashMap<String, HashSet<usize>> = HashMap::new();
@@ -98,16 +120,36 @@ fn main() {
 
     // Open output file as gzipped output
     info!("Opening output FASTQ files ..");
-    let mut fastq_outputs: Vec<GzEncoder<BufWriter<File>>> = fastq_output_files.iter().map( |o| {
+    let fastq_outputs: Vec<GzEncoder<BufWriter<File>>> = fastq_output_files.iter().map( |o| {
         let w1 = File::create(o)
             .expect(&format!("Failed to open output file {} for writing", o));
         GzEncoder::new(BufWriter::new(w1), Compression::default())
     }).collect();
 
+    match fastq_input {
+        Some(r) => read_fastq(
+            seq_io::fastq::Reader::new(r),
+            index_to_expected_count,
+            name_to_index,
+            fastq_outputs),
+        None => read_fastq(
+            seq_io::fastq::Reader::new(std::io::stdin()),
+            index_to_expected_count,
+            name_to_index,
+            fastq_outputs)
+    };
+}
+
+fn read_fastq<T>(
+    mut reader: seq_io::fastq::Reader<T>,
+    index_to_expected_count: Vec<usize>,
+    name_to_index: HashMap<String, HashSet<usize>>,
+    mut fastq_outputs: Vec<GzEncoder<BufWriter<File>>>)
+where T: Read {
     info!("Iterating input FASTQ file");
     let mut total_input_reads: usize = 0;
     let mut index_to_observed_count: Vec<usize> = vec![0; index_to_expected_count.len()];
-    let mut reader = seq_io::fastq::Reader::new(std::io::stdin());
+
     while let Some(record) = reader.next() {
         let r2 = record.unwrap();
         match name_to_index.get(r2.id()
