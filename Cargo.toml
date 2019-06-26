@@ -2,7 +2,12 @@
 name = "mfqe"
 version = "0.3.0"
 authors = ["Ben J Woodcroft <donttrustben@gmail.com>"]
-edition = "2018"
+license = "GPL-3.0"
+description = "FASTA/Q read extractor"
+homepage = "https://github.com/wwood/mfqe"
+repository = "https://github.com/wwood/mfqe"
+documentation = "https://github.com/wwood/mfqe"
+readme = "README.md"
 
 [dependencies]
 seq_io = "0.3.*"
