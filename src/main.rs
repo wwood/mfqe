@@ -6,6 +6,7 @@ use std::env;
 
 extern crate seq_io;
 use seq_io::fastq::Record;
+use seq_io::fasta::Record as OtherRecord;
 
 extern crate clap;
 use clap::*;
@@ -38,16 +39,30 @@ fn main() {
 
         .arg(Arg::with_name("fastq-read-name-lists")
              .long("fastq-read-name-lists")
-             .required(true)
+             .required_unless("fasta-read-name-lists")
              .takes_value(true)
              .multiple(true))
         .arg(Arg::with_name("output-fastq-files")
              .long("output-fastq-files")
-             .required(true)
+             .required_unless("output-fasta-files")
              .takes_value(true)
              .multiple(true))
         .arg(Arg::with_name("input-fastq")
              .long("input-fastq")
+             .takes_value(true))
+
+        .arg(Arg::with_name("fasta-read-name-lists")
+             .long("fasta-read-name-lists")
+             .required_unless("fastq-read-name-lists")
+             .takes_value(true)
+             .multiple(true))
+        .arg(Arg::with_name("output-fasta-files")
+             .long("output-fasta-files")
+             .required_unless("output-fastq-files")
+             .takes_value(true)
+             .multiple(true))
+        .arg(Arg::with_name("input-fasta")
+             .long("input-fasta")
              .takes_value(true));
 
     let matches = app.clone().get_matches();
@@ -62,36 +77,69 @@ fn main() {
         panic!("Failed to set log level - has it been specified multiple times?")
     }
 
-    // check the number of fastq read name files is the same as the number of
-    // output files.
-    let fastq_read_lists: Vec<&str> = matches.values_of("fastq-read-name-lists").unwrap().collect();
-    let fastq_output_files: Vec<&str> = matches.values_of("output-fastq-files").unwrap().collect();
-    let fastq_input = match matches.value_of("input-fastq") {
-        Some(path) => Some(BufReader::new(
-            File::open(path)
-                .expect("Failed to open fastq file for reading"))),
-        None => None
-    };
+    let read_lists: Vec<&str>;
+    let output_files: Vec<&str>;
+    let input: Option<BufReader<File>>;
 
-    if fastq_output_files.len() != fastq_read_lists.len() {
-        panic!("The number of read name files was {}, output files there was \
-                {}. These numbers must be equal.",
-               fastq_output_files.len(), fastq_read_lists.len());
+    let doing_fastq = matches.is_present("fastq-read-name-lists");
+
+    if doing_fastq {
+        // Doing fastq
+        read_lists = matches.values_of("fastq-read-name-lists").unwrap().collect();
+        output_files = matches.values_of("output-fastq-files").unwrap().collect();
+        input = match matches.value_of("input-fastq") {
+            Some(path) => Some(BufReader::new(
+                File::open(path)
+                    .expect("Failed to open fastq file for reading"))),
+            None => None
+        };
+
+    } else {
+        read_lists = matches.values_of("fasta-read-name-lists").unwrap().collect();
+        output_files = matches.values_of("output-fasta-files").unwrap().collect();
+        input = match matches.value_of("input-fasta") {
+            Some(path) => Some(BufReader::new(
+                File::open(path)
+                    .expect("Failed to open fasta file for reading"))),
+            None => None
+        };
+
     }
 
-    fastq_pipeline(fastq_input, fastq_read_lists, fastq_output_files);
+    // check the number of fastq read name files is the same as the number of
+    // output files.
+    if output_files.len() != read_lists.len() {
+        panic!("The number of read name files was {}, output files there was \
+                {}. These numbers must be equal.",
+               output_files.len(), read_lists.len());
+    }
+
+    let name_index = generate_name_index(read_lists);
+
+    // Open output file as gzipped output
+    info!("Opening output FASTQ files ..");
+    let outputs: Vec<GzEncoder<BufWriter<File>>> = output_files.iter().map( |o| {
+        let w1 = File::create(o)
+            .expect(&format!("Failed to open output file {} for writing", o));
+        GzEncoder::new(BufWriter::new(w1), Compression::default())
+    }).collect();
+
+    match doing_fastq {
+        true => fastq_pipeline(input, name_index, outputs),
+        false => fasta_pipeline(input, name_index, outputs)
+    };
 }
 
+struct NameIndex {
+    name_to_index: HashMap<String, HashSet<usize>>,
+    index_to_expected_count: Vec<usize>,
+}
 
-fn fastq_pipeline(
-    fastq_input: Option<BufReader<File>>,
-    fastq_read_lists: Vec<&str>,
-    fastq_output_files: Vec<&str>) {
-
+fn generate_name_index(read_lists: Vec<&str>) -> NameIndex {
     // Read in each read name into has hashmap
     let mut name_to_index: HashMap<String, HashSet<usize>> = HashMap::new();
     let mut index_to_expected_count: Vec<usize> = vec![];
-    for (i, read_name_file) in fastq_read_lists.iter().enumerate() {
+    for (i, read_name_file) in read_lists.iter().enumerate() {
         let mut lines_in_file: u64 = 0;
         let reader1 = File::open(read_name_file)
             .expect(&format!("Failed to open read name file {}", read_name_file));
@@ -103,7 +151,7 @@ fn fastq_pipeline(
                     if !prevs.insert(i) {
                         panic!(
                             "It appears that read '{}' was specified twice in input file {}",
-                            name, fastq_read_lists[i]);
+                            name, read_lists[i]);
                     }
                 },
                 None => {
@@ -118,30 +166,87 @@ fn fastq_pipeline(
         info!("Read in {} read names from {}", lines_in_file, read_name_file);
     }
 
-    // Open output file as gzipped output
-    info!("Opening output FASTQ files ..");
-    let fastq_outputs: Vec<GzEncoder<BufWriter<File>>> = fastq_output_files.iter().map( |o| {
-        let w1 = File::create(o)
-            .expect(&format!("Failed to open output file {} for writing", o));
-        GzEncoder::new(BufWriter::new(w1), Compression::default())
-    }).collect();
+    NameIndex {
+        name_to_index: name_to_index,
+        index_to_expected_count: index_to_expected_count
+    }
+}
+fn fastq_pipeline(
+    fastq_input: Option<BufReader<File>>,
+    name_index: NameIndex,
+    outputs: Vec<GzEncoder<BufWriter<File>>>) {
 
     match fastq_input {
         Some(r) => read_fastq(
             seq_io::fastq::Reader::new(r),
-            index_to_expected_count,
-            name_to_index,
-            fastq_outputs),
+            name_index.index_to_expected_count,
+            name_index.name_to_index,
+            outputs),
         None => read_fastq(
             seq_io::fastq::Reader::new(std::io::stdin()),
-            index_to_expected_count,
-            name_to_index,
-            fastq_outputs)
+            name_index.index_to_expected_count,
+            name_index.name_to_index,
+            outputs)
     };
 }
 
 fn read_fastq<T>(
     mut reader: seq_io::fastq::Reader<T>,
+    index_to_expected_count: Vec<usize>,
+    name_to_index: HashMap<String, HashSet<usize>>,
+    mut fastq_outputs: Vec<GzEncoder<BufWriter<File>>>)
+where T: Read {
+    info!("Iterating input FASTQ file");
+    let mut total_input_reads: usize = 0;
+    let mut index_to_observed_count: Vec<usize> = vec![0; index_to_expected_count.len()];
+
+    while let Some(record) = reader.next() {
+        let r2 = record.unwrap();
+        match name_to_index.get(r2.id()
+                                .expect("UTF8 error when decoding FASTQ header")) {
+            Some(indices) => {
+                for i in indices {
+                    index_to_observed_count[*i] += 1;
+                    r2.write(&mut fastq_outputs[*i]).expect("Failed to write a FASTQ record");
+                }
+            },
+            None => {}
+        };
+        total_input_reads += 1;
+    }
+
+    let total_assigned_reads: usize = index_to_observed_count.iter().sum();
+    info!("Extracted {} reads from {} total", total_assigned_reads, total_input_reads);
+    if index_to_expected_count != index_to_observed_count {
+        panic!("Mismatching numbers of read names were observed. Expected:\n{:?}\nbut found\n{:?}",
+               index_to_expected_count, index_to_observed_count);
+    }
+}
+
+fn fasta_pipeline(
+    input: Option<BufReader<File>>,
+    name_index: NameIndex,
+    outputs: Vec<GzEncoder<BufWriter<File>>>) {
+
+
+    match input {
+        Some(r) => read_fasta(
+            seq_io::fasta::Reader::new(r),
+            name_index.index_to_expected_count,
+            name_index.name_to_index,
+            outputs),
+        None => read_fasta(
+            seq_io::fasta::Reader::new(std::io::stdin()),
+            name_index.index_to_expected_count,
+            name_index.name_to_index,
+            outputs)
+    };
+
+}
+
+
+fn read_fasta<T>( // TODO: This is duplicated code, but too lazy to fix right now.
+    mut reader: seq_io::fasta::Reader<T>,
     index_to_expected_count: Vec<usize>,
     name_to_index: HashMap<String, HashSet<usize>>,
     mut fastq_outputs: Vec<GzEncoder<BufWriter<File>>>)
