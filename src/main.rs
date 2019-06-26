@@ -29,12 +29,21 @@ fn main() {
         .about("Extract multiple sets of fastq reads by name")
         .help("Usage: zcat my.fastq.gz |mfqe --fastq-read-name-lists <LIST1> .. --output-fastq-files <OUTPUT1> ..\n\
                \n\
-               Purpose is to extract one or more sets of reads from a FASTQ file by specifying their read name.\n\n\
-               Read name files are uncompressed text files with read names (without comments).\n\
+
+               Purpose is to extract one or more sets of reads from a FASTQ (or \
+               FASTA) file by specifying their read names.\n\n\
+
+               Read name files are uncompressed text files with read names\
+               (without comments).\n\
+
                Output is gzip-compressed, input may or may not be.\n\
-               \nOther options:
-               \n--input-fastq <PATH>: Use this file as input fastq [default: Use STDIN]
-               \n")
+               \nOther FASTQ options:
+               \n--input-fastq <PATH>: Use this file as input FASTQ [default: Use STDIN]\
+               \n\n\
+               An analogous set of options is implemented for FASTA:\n\n\
+               --fasta-read-name-lists <LIST1> ..\n\
+               --output-fasta-files <OUTPUT1> ..\n\
+               --input-fasta <PATH>\n\n")
         .usage("zcat my.fastq.gz |mfqe --fastq-read-name-lists <LIST1> .. --output-fastq-files <OUTPUT1> ..")
 
         .arg(Arg::with_name("fastq-read-name-lists")
