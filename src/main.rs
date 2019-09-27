@@ -27,13 +27,14 @@ fn main() {
         .version(crate_version!())
         .author("Ben J. Woodcroft <benjwoodcroft near gmail.com>")
         .about("Extract multiple sets of fastq reads by name")
-        .help("Usage: zcat my.fastq.gz |mfqe --fastq-read-name-lists <LIST1> .. --output-fastq-files <OUTPUT1> ..\n\
+        .help("\nUsage for FASTQ:\n  \
+                  zcat my.fastq.gz |mfqe --fastq-read-name-lists <LIST1> .. --output-fastq-files <OUTPUT1> ..\n\
                \n\
 
-               Purpose is to extract one or more sets of reads from a FASTQ (or \
+               Extract one or more sets of reads from a FASTQ (or \
                FASTA) file by specifying their read names.\n\n\
 
-               Read name files are uncompressed text files with read names\
+               Read name files are uncompressed text files with read names \
                (without comments).\n\
 
                Output is gzip-compressed unless --output-uncompressed is specified, input may or may not be.\n\
