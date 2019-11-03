@@ -86,4 +86,23 @@ mod tests {
             .stdout().is(">random_sequence_length_5_1\n\
                           GGTGT\n").unwrap();
     }
+
+    #[test]
+    fn test_define_sequence_names(){
+        let tf: tempfile::NamedTempFile = tempfile::NamedTempFile::new().unwrap();
+        let t = tf.path().to_str().unwrap();
+        let mut contents = String::new();
+        std::fs::File::open("tests/data/a.fasta").unwrap().read_to_string(&mut contents).unwrap();
+        Assert::main_binary()
+            .with_args(&[
+                "-l",
+                "tests/data/input1",
+                "--output-fasta-files",
+                t])
+            .stdin(contents)
+            .succeeds().unwrap();
+        Assert::command(&["zcat",t])
+            .stdout().is(">random_sequence_length_5_1\n\
+                          GGTGT\n").unwrap();
+    }
 }

@@ -28,7 +28,7 @@ fn main() {
         .author("Ben J. Woodcroft <benjwoodcroft near gmail.com>")
         .about("Extract multiple sets of fastq reads by name")
         .usage("\nUsage for FASTQ:\n  \
-                  zcat my.fastq.gz |mfqe --fastq-read-name-lists <LIST1> .. --output-fastq-files <OUTPUT1> ..\n\
+                  zcat my.fastq.gz |mfqe --sequence-name-lists <LIST1> .. --output-fastq-files <OUTPUT1> ..\n\
                \n\
 
                Extract one or more sets of reads from a FASTQ (or \
@@ -37,21 +37,39 @@ fn main() {
                Read name files are uncompressed text files with read names \
                (without comments).\n\
 
-               Output is gzip-compressed unless --output-uncompressed is specified, input may or may not be.\n\
+               Output is gzip-compressed unless --output-uncompressed is specified, input is uncompressed.\n\
                \nOther FASTQ options:
                \n--input-fastq <PATH>: Use this file as input FASTQ [default: Use STDIN]\
                \n\n\
                An analogous set of options is implemented for FASTA:\n\n\
-               --fasta-read-name-lists <LIST1> ..\n\
                --output-fasta-files <OUTPUT1> ..\n\
                --input-fasta <PATH>\n\n")
 
-        .arg(Arg::with_name("fastq-read-name-lists")
-             .long("fastq-read-name-lists")
+        // Unfortunately clap cannot properly take multiple .long() arguments, so
+        // we have to define multiple args for backwards compatibility.
+        .arg(Arg::with_name("sequence-name-lists")
+             .long("sequence-name-lists")
+             .short("l")
              .help("List of files each containing sequence IDs")
-             .required_unless("fasta-read-name-lists")
+             .required_unless_one(&["fastq-read-name-lists","fasta-read-name-lists"])
+             .conflicts_with_all(&["fastq-read-name-lists","fasta-read-name-lists"])
              .takes_value(true)
              .multiple(true))
+        .arg(Arg::with_name("fastq-read-name-lists")
+             .long("fastq-read-name-lists")
+             .help("List of files each containing sequence IDs [alias for --sequence-name-lists]")
+             .required_unless_one(&["sequence-name-lists","fasta-read-name-lists"])
+             .conflicts_with_all(&["sequence-name-lists","fasta-read-name-lists"])
+             .takes_value(true)
+             .multiple(true))
+        .arg(Arg::with_name("fasta-read-name-lists")
+             .long("fasta-read-name-lists")
+             .help("List of files each containing sequence IDs [alias for --sequence-name-lists]")
+             .required_unless_one(&["fastq-read-name-lists","sequence-name-lists"])
+             .conflicts_with_all(&["fastq-read-name-lists","sequence-name-lists"])
+             .takes_value(true)
+             .multiple(true))
+
         .arg(Arg::with_name("output-fastq-files")
              .long("output-fastq-files")
              .help("List of files to write FASTQ to")
@@ -63,12 +81,6 @@ fn main() {
              .help("File containing uncompressed input FASTQ sequences [default: Use STDIN]")
              .takes_value(true))
 
-        .arg(Arg::with_name("fasta-read-name-lists")
-             .long("fasta-read-name-lists")
-             .help("List of files each containing sequence IDs")
-             .required_unless("fastq-read-name-lists")
-             .takes_value(true)
-             .multiple(true))
         .arg(Arg::with_name("output-fasta-files")
              .long("output-fasta-files")
              .help("List of files to write FASTA to")
@@ -97,15 +109,21 @@ fn main() {
         panic!("Failed to set log level - has it been specified multiple times?")
     }
 
-    let read_lists: Vec<&str>;
     let output_files: Vec<&str>;
     let input: Option<BufReader<File>>;
 
-    let doing_fastq = matches.is_present("fastq-read-name-lists");
+    let doing_fastq = matches.is_present("output-fastq-files");
+    let read_lists: Vec<&str> = if matches.is_present("fasta-read-name-lists") {
+        matches.values_of("fasta-read-name-lists").unwrap().collect()
+    } else if matches.is_present("fastq-read-name-lists") {
+        matches.values_of("fastq-read-name-lists").unwrap().collect()
+    } else {
+        matches.values_of("sequence-name-lists").unwrap().collect()
+    };
+    debug!("Found readname lists {:#?}", read_lists);
 
     if doing_fastq {
         // Doing fastq
-        read_lists = matches.values_of("fastq-read-name-lists").unwrap().collect();
         output_files = matches.values_of("output-fastq-files").unwrap().collect();
         input = match matches.value_of("input-fastq") {
             Some(path) => Some(BufReader::new(
@@ -115,7 +133,6 @@ fn main() {
         };
 
     } else {
-        read_lists = matches.values_of("fasta-read-name-lists").unwrap().collect();
         output_files = matches.values_of("output-fasta-files").unwrap().collect();
         input = match matches.value_of("input-fasta") {
             Some(path) => Some(BufReader::new(
