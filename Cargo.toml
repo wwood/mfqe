@@ -1,6 +1,6 @@
 [package]
 name = "mfqe"
-version = "0.4.1"
+version = "0.5.0"
 authors = ["Ben J Woodcroft <donttrustben@gmail.com>"]
 license = "GPL-3.0"
 description = "FASTA/Q read extractor"
