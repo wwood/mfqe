@@ -36,7 +36,7 @@ fn main() {
                Read name files are uncompressed text files with read names\
                (without comments).\n\
 
-               Output is gzip-compressed, input may or may not be.\n\
+               Output is gzip-compressed unless --output-uncompressed is specified, input may or may not be.\n\
                \nOther FASTQ options:
                \n--input-fastq <PATH>: Use this file as input FASTQ [default: Use STDIN]\
                \n\n\
@@ -72,7 +72,11 @@ fn main() {
              .multiple(true))
         .arg(Arg::with_name("input-fasta")
              .long("input-fasta")
-             .takes_value(true));
+             .takes_value(true))
+             
+        .arg(Arg::with_name("output-uncompressed")
+             .long("output-uncompressed")
+             .short("u"));
 
     let matches = app.clone().get_matches();
 
@@ -126,16 +130,34 @@ fn main() {
     let name_index = generate_name_index(read_lists);
 
     // Open output file as gzipped output
-    info!("Opening output FASTQ files ..");
-    let outputs: Vec<GzEncoder<BufWriter<File>>> = output_files.iter().map( |o| {
-        let w1 = File::create(o)
-            .expect(&format!("Failed to open output file {} for writing", o));
-        GzEncoder::new(BufWriter::new(w1), Compression::default())
-    }).collect();
+    let output_compressed = !matches.is_present("output-uncompressed");
+    let uncompressed_outputs: Option<Vec<File>> = if output_compressed {
+        None 
+    } else {
+        Some(output_files.iter().map( |o| {
+            File::create(o)
+                .expect(&format!("Failed to open output file {} for writing", o))
+        }).collect())
+    };
+    let compressed_outputs: Option<Vec<GzEncoder<BufWriter<File>>>> = if output_compressed {
+        Some(output_files.iter().map( |o| {
+            let w1 = File::create(o)
+                .expect(&format!("Failed to open output file {} for writing", o));
+            GzEncoder::new(BufWriter::new(w1), Compression::default())
+            }).collect())
+    } else {
+        None
+    };
 
     match doing_fastq {
-        true => fastq_pipeline(input, name_index, outputs),
-        false => fasta_pipeline(input, name_index, outputs)
+        true => match output_compressed {
+            true => fastq_pipeline(input, name_index, compressed_outputs.unwrap()),
+            false => fastq_pipeline(input, name_index, uncompressed_outputs.unwrap()),
+        },
+        false => match output_compressed {
+            true => fasta_pipeline(input, name_index, compressed_outputs.unwrap()),
+            false => fasta_pipeline(input, name_index, uncompressed_outputs.unwrap()),
+        },
     };
 }
 
@@ -182,10 +204,10 @@ fn generate_name_index(read_lists: Vec<&str>) -> NameIndex {
         index_to_expected_count: index_to_expected_count
     }
 }
-fn fastq_pipeline(
+fn fastq_pipeline<W: Write>(
     fastq_input: Option<BufReader<File>>,
     name_index: NameIndex,
-    outputs: Vec<GzEncoder<BufWriter<File>>>) {
+    outputs: Vec<W>) {
 
     match fastq_input {
         Some(r) => read_fastq(
@@ -201,12 +223,12 @@ fn fastq_pipeline(
     };
 }
 
-fn read_fastq<T>(
-    mut reader: seq_io::fastq::Reader<T>,
+fn read_fastq<R, W>(
+    mut reader: seq_io::fastq::Reader<R>,
     index_to_expected_count: Vec<usize>,
     name_to_index: HashMap<String, HashSet<usize>>,
-    mut fastq_outputs: Vec<GzEncoder<BufWriter<File>>>)
-where T: Read {
+    mut fastq_outputs: Vec<W>)
+where R: Read, W: Write {
     info!("Iterating input FASTQ file");
     let mut total_input_reads: usize = 0;
     let mut index_to_observed_count: Vec<usize> = vec![0; index_to_expected_count.len()];
@@ -234,10 +256,10 @@ where T: Read {
     }
 }
 
-fn fasta_pipeline(
+fn fasta_pipeline<W: Write>(
     input: Option<BufReader<File>>,
     name_index: NameIndex,
-    outputs: Vec<GzEncoder<BufWriter<File>>>) {
+    outputs: Vec<W>) {
 
 
     match input {
@@ -256,12 +278,12 @@ fn fasta_pipeline(
 }
 
 
-fn read_fasta<T>( // TODO: This is duplicated code, but too lazy to fix right now.
-    mut reader: seq_io::fasta::Reader<T>,
+fn read_fasta<R, W>( // TODO: This is duplicated code, but too lazy to fix right now.
+    mut reader: seq_io::fasta::Reader<R>,
     index_to_expected_count: Vec<usize>,
     name_to_index: HashMap<String, HashSet<usize>>,
-    mut fastq_outputs: Vec<GzEncoder<BufWriter<File>>>)
-where T: Read {
+    mut fastq_outputs: Vec<W>)
+where R: Read, W: Write {
     info!("Iterating input FASTQ file");
     let mut total_input_reads: usize = 0;
     let mut index_to_observed_count: Vec<usize> = vec![0; index_to_expected_count.len()];
