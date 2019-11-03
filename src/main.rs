@@ -27,7 +27,7 @@ fn main() {
         .version(crate_version!())
         .author("Ben J. Woodcroft <benjwoodcroft near gmail.com>")
         .about("Extract multiple sets of fastq reads by name")
-        .help("\nUsage for FASTQ:\n  \
+        .usage("\nUsage for FASTQ:\n  \
                   zcat my.fastq.gz |mfqe --fastq-read-name-lists <LIST1> .. --output-fastq-files <OUTPUT1> ..\n\
                \n\
 
@@ -45,38 +45,44 @@ fn main() {
                --fasta-read-name-lists <LIST1> ..\n\
                --output-fasta-files <OUTPUT1> ..\n\
                --input-fasta <PATH>\n\n")
-        .usage("zcat my.fastq.gz |mfqe --fastq-read-name-lists <LIST1> .. --output-fastq-files <OUTPUT1> ..")
 
         .arg(Arg::with_name("fastq-read-name-lists")
              .long("fastq-read-name-lists")
+             .help("List of files each containing sequence IDs")
              .required_unless("fasta-read-name-lists")
              .takes_value(true)
              .multiple(true))
         .arg(Arg::with_name("output-fastq-files")
              .long("output-fastq-files")
+             .help("List of files to write FASTQ to")
              .required_unless("output-fasta-files")
              .takes_value(true)
              .multiple(true))
         .arg(Arg::with_name("input-fastq")
              .long("input-fastq")
+             .help("File containing uncompressed input FASTQ sequences [default: Use STDIN]")
              .takes_value(true))
 
         .arg(Arg::with_name("fasta-read-name-lists")
              .long("fasta-read-name-lists")
+             .help("List of files each containing sequence IDs")
              .required_unless("fastq-read-name-lists")
              .takes_value(true)
              .multiple(true))
         .arg(Arg::with_name("output-fasta-files")
              .long("output-fasta-files")
+             .help("List of files to write FASTA to")
              .required_unless("output-fastq-files")
              .takes_value(true)
              .multiple(true))
         .arg(Arg::with_name("input-fasta")
              .long("input-fasta")
+             .help("File containing uncompressed input FASTA sequences [default: Use STDIN]")
              .takes_value(true))
              
         .arg(Arg::with_name("output-uncompressed")
              .long("output-uncompressed")
+             .help("Output sequences uncompressed [default: gzip compress outputs]")
              .short("u"));
 
     let matches = app.clone().get_matches();
