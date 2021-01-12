@@ -105,4 +105,24 @@ mod tests {
             .stdout().is(">random_sequence_length_5_1\n\
                           GGTGT\n").unwrap();
     }
+
+    #[test]
+    fn test_fastq_by_file_empty_lines_in_read_names(){
+        let tf: tempfile::NamedTempFile = tempfile::NamedTempFile::new().unwrap();
+        let t = tf.path().to_str().unwrap();
+        Assert::main_binary()
+            .with_args(&[
+                "--fastq-read-name-lists",
+                "tests/data/input1_with_empty",
+                "--output-fastq-files",
+                t,
+                "--input-fastq",
+                "tests/data/1.fq"]).succeeds().unwrap();
+        Assert::command(&["zcat",t])
+            .stdout().is("@random_sequence_length_5_1 1\n\
+                          TAGGG\n\
+                          +\n\
+                          AAAAA\n").unwrap();
+    }
+
 }

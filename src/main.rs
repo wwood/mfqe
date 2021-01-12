@@ -201,23 +201,26 @@ fn generate_name_index(read_lists: Vec<&str>) -> NameIndex {
         let reader = BufReader::new(reader1);
         for line in reader.lines() {
             let name = line.unwrap();
-            let insert = match name_to_index.get_mut(&name) {
-                Some(prevs) => {
-                    if !prevs.insert(i) {
-                        panic!(
-                            "It appears that read '{}' was specified twice in input file {}",
-                            name, read_lists[i]);
-                    }
-                    false
-                },
-                None => true
-            };
-            if insert { // Do this to get around the borrow checker
-                let mut set = HashSet::with_capacity(1);
-                set.insert(i);
-                name_to_index.insert(name.clone(), set);
+            // Ignore blank lines
+            if name != "" {
+                let insert = match name_to_index.get_mut(&name) {
+                    Some(prevs) => {
+                        if !prevs.insert(i) {
+                            panic!(
+                                "It appears that read '{}' was specified twice in input file {}",
+                                name, read_lists[i]);
+                        }
+                        false
+                    },
+                    None => true
+                };
+                if insert { // Do this to get around the borrow checker
+                    let mut set = HashSet::with_capacity(1);
+                    set.insert(i);
+                    name_to_index.insert(name.clone(), set);
+                }
+                lines_in_file += 1;
             }
-            lines_in_file += 1;
         }
         index_to_expected_count.push(lines_in_file as usize);
         info!("Read in {} read names from {}", lines_in_file, read_name_file);
