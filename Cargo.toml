@@ -11,7 +11,7 @@ readme = "README.md"
 
 [dependencies]
 seq_io = "0.3.*"
-clap = "2.*"
+clap = "3.*"
 log = "0.4.*"
 env_logger = "0.8.*"
 flate2 = "1.0.*"
