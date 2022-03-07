@@ -141,15 +141,15 @@ mod tests {
                 "--append",
                 "--input-fasta",
                 "tests/data/a.fasta"]).succeeds().unwrap();
-                Assert::main_binary()
-                    .with_args(&[
-                        "--fasta-read-name-lists",
-                        "tests/data/input1",
-                        "--output-fasta-files",
-                        t,
-                        "--append",
-                        "--input-fasta",
-                        "tests/data/a.fasta"]).succeeds().unwrap();
+        Assert::main_binary()
+            .with_args(&[
+                "--fasta-read-name-lists",
+                "tests/data/input1",
+                "--output-fasta-files",
+                t,
+                "--append",
+                "--input-fasta",
+                "tests/data/a.fasta"]).succeeds().unwrap();
         Assert::command(&["zcat",t])
             .stdout().is(">random_sequence_length_5_1\n\
             GGTGT\n\
@@ -205,4 +205,41 @@ mod tests {
                           GGTGT\n").unwrap();
     }
 
+
+    #[test]
+    fn test_appending_no_gzip_two_files(){
+        let mut tf: tempfile::NamedTempFile = tempfile::NamedTempFile::new().unwrap();
+        write!(tf, "abc\n").unwrap();
+        tf.flush().unwrap();
+
+        let mut tf2: tempfile::NamedTempFile = tempfile::NamedTempFile::new().unwrap();
+        write!(tf2, "defabc\n").unwrap();
+        tf2.flush().unwrap();
+        
+        let t = tf.path().to_str().unwrap();
+        let t2 = tf2.path().to_str().unwrap();
+
+        let mut contents = String::new();
+        std::fs::File::open("tests/data/a.fasta").unwrap().read_to_string(&mut contents).unwrap();
+        Assert::main_binary()
+            .with_args(&[
+                "--fasta-read-name-lists",
+                "tests/data/input1",
+                "tests/data/input2",
+                "--output-fasta-files",
+                t,
+                t2,
+                "--append",
+                "--output-uncompressed",
+                "--input-fasta",
+                "tests/data/a.fasta"]).succeeds().unwrap();
+        Assert::command(&["cat",t])
+            .stdout().is("abc\n>random_sequence_length_5_1\n\
+                            GGTGT\n").succeeds().unwrap();
+        Assert::command(&["cat",t2])
+            .stdout().is("defabc\n>random_sequence_length_5_1\n\
+            GGTGT\n\
+            >random_sequence_length_5_2\n\
+            TTATG\n").succeeds().unwrap();
+    }
 }
