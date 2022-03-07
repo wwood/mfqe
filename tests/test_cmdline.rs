@@ -242,4 +242,26 @@ mod tests {
             >random_sequence_length_5_2\n\
             TTATG\n").succeeds().unwrap();
     }
+
+
+    #[test]
+    fn test_fasta_sequence_prefix(){
+        let tf: tempfile::NamedTempFile = tempfile::NamedTempFile::new().unwrap();
+        let t = tf.path().to_str().unwrap();
+        let mut contents = String::new();
+        std::fs::File::open("tests/data/a.fasta").unwrap().read_to_string(&mut contents).unwrap();
+        Assert::main_binary()
+            .with_args(&[
+                "--fasta-read-name-lists",
+                "tests/data/input1",
+                "--sequence-prefix",
+                "i am a prefix",
+                "--output-fasta-files",
+                t])
+            .stdin(contents)
+            .succeeds().unwrap();
+        Assert::command(&["zcat",t])
+            .stdout().is(">i am a prefixrandom_sequence_length_5_1\n\
+                          GGTGT\n").unwrap();
+    }
 }

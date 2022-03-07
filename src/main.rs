@@ -5,6 +5,7 @@ use std::fs::OpenOptions;
 use std::collections::{HashMap,HashSet};
 use std::env;
 use std::path::Path;
+use std::str;
 
 extern crate seq_io;
 use seq_io::fastq::Record;
@@ -103,6 +104,10 @@ fn main() {
              .long("output-uncompressed")
              .help("Output sequences uncompressed [default: gzip compress outputs]")
              .short('u'))
+        .arg(Arg::new("sequence-prefix")
+             .long("sequence-prefix")
+             .help("Prefix to add to each sequence name")
+             .takes_value(true))
         .arg(Arg::new("append")
              .long("append")
              .help("Append to output files [default: Overwrite]")
@@ -184,14 +189,24 @@ fn main() {
         None
     };
 
+    let sequence_name_prefix = match matches.is_present("sequence-prefix") {
+        true => Option::Some(matches.value_of("sequence-prefix").unwrap()),
+        false => Option::None
+    };
+
     match doing_fastq {
-        true => match output_compressed {
-            true => fastq_pipeline(input, name_index, compressed_outputs.unwrap()),
-            false => fastq_pipeline(input, name_index, uncompressed_outputs.unwrap()),
+        true => {
+            if sequence_name_prefix.is_some() {
+                panic!("FASTQ output not current compatible with prefixes")
+            }
+            match output_compressed {
+                true => fastq_pipeline(input, name_index, compressed_outputs.unwrap()),
+                false => fastq_pipeline(input, name_index, uncompressed_outputs.unwrap()),
+            }
         },
         false => match output_compressed {
-            true => fasta_pipeline(input, name_index, compressed_outputs.unwrap()),
-            false => fasta_pipeline(input, name_index, uncompressed_outputs.unwrap()),
+            true => fasta_pipeline(input, name_index, compressed_outputs.unwrap(), sequence_name_prefix),
+            false => fasta_pipeline(input, name_index, uncompressed_outputs.unwrap(), sequence_name_prefix),
         },
     };
 }
@@ -312,7 +327,8 @@ where R: Read, W: Write {
 fn fasta_pipeline<W: Write>(
     input: Option<BufReader<File>>,
     name_index: NameIndex,
-    outputs: Vec<W>) {
+    outputs: Vec<W>,
+    sequence_name_prefix: Option<&str>) {
 
 
     match input {
@@ -320,12 +336,14 @@ fn fasta_pipeline<W: Write>(
             seq_io::fasta::Reader::new(r),
             name_index.index_to_expected_count,
             name_index.name_to_index,
-            outputs),
+            outputs,
+            sequence_name_prefix),
         None => read_fasta(
             seq_io::fasta::Reader::new(std::io::stdin()),
             name_index.index_to_expected_count,
             name_index.name_to_index,
-            outputs)
+            outputs,
+            sequence_name_prefix)
     };
 
 }
@@ -335,7 +353,8 @@ fn read_fasta<R, W>( // TODO: This is duplicated code, but too lazy to fix right
     mut reader: seq_io::fasta::Reader<R>,
     index_to_expected_count: Vec<usize>,
     name_to_index: HashMap<String, HashSet<usize>>,
-    mut fastq_outputs: Vec<W>)
+    mut fastq_outputs: Vec<W>,
+    sequence_name_prefix: Option<&str>)
 where R: Read, W: Write {
     info!("Iterating input FASTQ file");
     let mut total_input_reads: usize = 0;
@@ -344,11 +363,22 @@ where R: Read, W: Write {
     while let Some(record) = reader.next() {
         let r2 = record.unwrap();
         match name_to_index.get(r2.id()
-                                .expect("UTF8 error when decoding FASTQ header")) {
+                                .expect("UTF8 error when decoding FASTA header")) {
             Some(indices) => {
                 for i in indices {
                     index_to_observed_count[*i] += 1;
-                    r2.write(&mut fastq_outputs[*i]).expect("Failed to write a FASTQ record");
+                    match sequence_name_prefix {
+                        Some(pre) => {
+                            write!(&mut fastq_outputs[*i], ">{}{}\n{}\n",
+                                pre,
+                                r2.id().expect("UTF8 error when decoding FASTA header"),
+                                str::from_utf8(r2.seq())
+                                    .expect("Failed to convert FASTA sequence to UTF8"))
+                        },
+                        None => {
+                            r2.write(&mut fastq_outputs[*i])
+                        }
+                    }.expect("Failed to write to output file");
                 }
             },
             None => {}
