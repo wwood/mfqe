@@ -25,11 +25,11 @@ use env_logger::Builder;
 
 
 fn main() {
-    let app = App::new("mfqe")
+    let app = Command::new("mfqe")
         .version(crate_version!())
         .author("Ben J. Woodcroft <benjwoodcroft near gmail.com>")
         .about("Extract multiple sets of fastq reads by name")
-        .usage("\nUsage for FASTQ:\n  \
+        .override_usage("\nUsage for FASTQ:\n  \
                   zcat my.fastq.gz |mfqe --sequence-name-lists <LIST1> .. --output-fastq-files <OUTPUT1> ..\n\
                \n\
 \n\
@@ -49,59 +49,59 @@ fn main() {
 
         // Unfortunately clap cannot properly take multiple .long() arguments, so
         // we have to define multiple args for backwards compatibility.
-        .arg(Arg::with_name("sequence-name-lists")
+        .arg(Arg::new("sequence-name-lists")
              .long("sequence-name-lists")
-             .short("l")
+             .short('l')
              .help("List of files each containing sequence IDs")
-             .required_unless_one(&["fastq-read-name-lists","fasta-read-name-lists"])
+             .required_unless_present_any(&["fastq-read-name-lists","fasta-read-name-lists"])
              .conflicts_with_all(&["fastq-read-name-lists","fasta-read-name-lists"])
              .takes_value(true)
-             .multiple(true))
-        .arg(Arg::with_name("fastq-read-name-lists")
+             .multiple_occurrences(true))
+        .arg(Arg::new("fastq-read-name-lists")
              .long("fastq-read-name-lists")
              .help("List of files each containing sequence IDs [alias for --sequence-name-lists]")
-             .required_unless_one(&["sequence-name-lists","fasta-read-name-lists"])
+             .required_unless_present_any(&["sequence-name-lists","fasta-read-name-lists"])
              .conflicts_with_all(&["sequence-name-lists","fasta-read-name-lists"])
              .takes_value(true)
-             .multiple(true))
-        .arg(Arg::with_name("fasta-read-name-lists")
+             .multiple_occurrences(true))
+        .arg(Arg::new("fasta-read-name-lists")
              .long("fasta-read-name-lists")
              .help("List of files each containing sequence IDs [alias for --sequence-name-lists]")
-             .required_unless_one(&["fastq-read-name-lists","sequence-name-lists"])
+             .required_unless_present_any(&["fastq-read-name-lists","sequence-name-lists"])
              .conflicts_with_all(&["fastq-read-name-lists","sequence-name-lists"])
              .takes_value(true)
-             .multiple(true))
+             .multiple_occurrences(true))
 
-        .arg(Arg::with_name("output-fastq-files")
+        .arg(Arg::new("output-fastq-files")
              .long("output-fastq-files")
              .help("List of files to write FASTQ to")
-             .required_unless("output-fasta-files")
+             .required_unless_present("output-fasta-files")
              .takes_value(true)
-             .multiple(true))
-        .arg(Arg::with_name("input-fastq")
+             .multiple_occurrences(true))
+        .arg(Arg::new("input-fastq")
              .long("input-fastq")
              .help("File containing uncompressed input FASTQ sequences [default: Use STDIN]")
              .takes_value(true))
 
-        .arg(Arg::with_name("output-fasta-files")
+        .arg(Arg::new("output-fasta-files")
              .long("output-fasta-files")
              .help("List of files to write FASTA to")
-             .required_unless("output-fastq-files")
+             .required_unless_present("output-fastq-files")
              .takes_value(true)
-             .multiple(true))
-        .arg(Arg::with_name("input-fasta")
+             .multiple_occurrences(true))
+        .arg(Arg::new("input-fasta")
              .long("input-fasta")
              .help("File containing uncompressed input FASTA sequences [default: Use STDIN]")
              .takes_value(true))
              
-        .arg(Arg::with_name("output-uncompressed")
+        .arg(Arg::new("output-uncompressed")
              .long("output-uncompressed")
              .help("Output sequences uncompressed [default: gzip compress outputs]")
-             .short("u"))
-        .arg(Arg::with_name("append")
+             .short('u'))
+        .arg(Arg::new("append")
              .long("append")
              .help("Append to output files [default: Overwrite]")
-             .short("a"));
+             .short('a'));
 
     let matches = app.clone().get_matches();
 

@@ -4,4 +4,4 @@ channels:
   - defaults
 dependencies:
   - rust >=1.19
-  - {{ compiler('c') }}
+  # - {{ compiler('c') }}
