@@ -1,8 +1,10 @@
 use std::io::prelude::*;
 use std::io::{BufReader, BufWriter};
 use std::fs::File;
+use std::fs::OpenOptions;
 use std::collections::{HashMap,HashSet};
 use std::env;
+use std::path::Path;
 
 extern crate seq_io;
 use seq_io::fastq::Record;
@@ -30,13 +32,13 @@ fn main() {
         .usage("\nUsage for FASTQ:\n  \
                   zcat my.fastq.gz |mfqe --sequence-name-lists <LIST1> .. --output-fastq-files <OUTPUT1> ..\n\
                \n\
-
+\n\
                Extract one or more sets of reads from a FASTQ (or \
                FASTA) file by specifying their read names.\n\n\
-
+\n\
                Read name files are uncompressed text files with read names \
                (without comments).\n\
-
+\n\
                Output is gzip-compressed unless --output-uncompressed is specified, input is uncompressed.\n\
                \nOther FASTQ options:
                \n--input-fastq <PATH>: Use this file as input FASTQ [default: Use STDIN]\
@@ -95,7 +97,11 @@ fn main() {
         .arg(Arg::with_name("output-uncompressed")
              .long("output-uncompressed")
              .help("Output sequences uncompressed [default: gzip compress outputs]")
-             .short("u"));
+             .short("u"))
+        .arg(Arg::with_name("append")
+             .long("append")
+             .help("Append to output files [default: Overwrite]")
+             .short("a"));
 
     let matches = app.clone().get_matches();
 
@@ -121,6 +127,8 @@ fn main() {
         matches.values_of("sequence-name-lists").unwrap().collect()
     };
     debug!("Found readname lists {:#?}", read_lists);
+
+    let appending = matches.is_present("append");
 
     if doing_fastq {
         // Doing fastq
@@ -159,14 +167,12 @@ fn main() {
         None 
     } else {
         Some(output_files.iter().map( |o| {
-            File::create(o)
-                .expect(&format!("Failed to open output file {} for writing", o))
+            open_a_file(o, appending)
         }).collect())
     };
     let compressed_outputs: Option<Vec<GzEncoder<BufWriter<File>>>> = if output_compressed {
         Some(output_files.iter().map( |o| {
-            let w1 = File::create(o)
-                .expect(&format!("Failed to open output file {} for writing", o));
+            let w1 = open_a_file(o, appending);
             GzEncoder::new(BufWriter::new(w1), Compression::default())
             }).collect())
     } else {
@@ -183,6 +189,21 @@ fn main() {
             false => fasta_pipeline(input, name_index, uncompressed_outputs.unwrap()),
         },
     };
+}
+
+fn open_a_file(path: &str, append: bool) -> File {
+    match append {
+        true => {
+            // must create the file, if it doesn't already exist
+            if !Path::new(path).exists() {
+                File::create(path).expect(&format!("Failed to create output file {}, before opening in append mode", path));
+            }
+            OpenOptions::new().append(true).open(path)
+                .expect(&format!("Failed to open output file {} for appending", path))
+        },
+        false => File::create(path)
+            .expect(&format!("Failed to open output file {} for writing", path)),
+    }
 }
 
 struct NameIndex {

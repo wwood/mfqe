@@ -6,6 +6,7 @@ mod tests {
     use assert_cli::Assert;
     extern crate tempfile;
     use std::io::Read;
+    use std::io::Write;
 
     #[test]
     fn test_fastq_by_file(){
@@ -123,6 +124,85 @@ mod tests {
                           TAGGG\n\
                           +\n\
                           AAAAA\n").unwrap();
+    }
+
+    #[test]
+    fn test_appending_gzip(){
+        let tf: tempfile::NamedTempFile = tempfile::NamedTempFile::new().unwrap();
+        let t = tf.path().to_str().unwrap();
+        let mut contents = String::new();
+        std::fs::File::open("tests/data/a.fasta").unwrap().read_to_string(&mut contents).unwrap();
+        Assert::main_binary()
+            .with_args(&[
+                "--fasta-read-name-lists",
+                "tests/data/input1",
+                "--output-fasta-files",
+                t,
+                "--append",
+                "--input-fasta",
+                "tests/data/a.fasta"]).succeeds().unwrap();
+                Assert::main_binary()
+                    .with_args(&[
+                        "--fasta-read-name-lists",
+                        "tests/data/input1",
+                        "--output-fasta-files",
+                        t,
+                        "--append",
+                        "--input-fasta",
+                        "tests/data/a.fasta"]).succeeds().unwrap();
+        Assert::command(&["zcat",t])
+            .stdout().is(">random_sequence_length_5_1\n\
+            GGTGT\n\
+            >random_sequence_length_5_1\n\
+            GGTGT\n").unwrap();
+    }
+
+
+    #[test]
+    fn test_appending_no_gzip(){
+        let mut tf: tempfile::NamedTempFile = tempfile::NamedTempFile::new().unwrap();
+        write!(tf, "abc\n").unwrap();
+        tf.flush().unwrap();
+        let t = tf.path().to_str().unwrap();
+        let mut contents = String::new();
+        std::fs::File::open("tests/data/a.fasta").unwrap().read_to_string(&mut contents).unwrap();
+        Assert::main_binary()
+            .with_args(&[
+                "--fasta-read-name-lists",
+                "tests/data/input1",
+                "--output-fasta-files",
+                t,
+                "--append",
+                "--output-uncompressed",
+                "--input-fasta",
+                "tests/data/a.fasta"]).succeeds().unwrap();
+        Assert::command(&["cat",t])
+            .stdout().is("abc\n>random_sequence_length_5_1\n\
+                          GGTGT\n").unwrap();
+    }
+
+    #[test]
+    fn test_appending_not_already_existing(){
+        let t = "/tmp/testme123_mfqe";
+        // delete t if it already exists
+        if std::path::Path::new(t).exists() {
+            std::fs::remove_file(t).unwrap();
+        }
+        let mut contents = String::new();
+        std::fs::File::open("tests/data/a.fasta").unwrap().read_to_string(&mut contents).unwrap();
+        Assert::main_binary()
+            .with_args(&[
+                "--fasta-read-name-lists",
+                "tests/data/input1",
+                "--output-fasta-files",
+                t,
+                "--append",
+                "--output-uncompressed",
+                "--input-fasta",
+                "tests/data/a.fasta"]).succeeds().unwrap();
+        Assert::command(&["cat",t])
+            .stdout().is(">random_sequence_length_5_1\n\
+                          GGTGT\n").unwrap();
     }
 
 }
